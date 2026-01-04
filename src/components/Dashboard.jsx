@@ -7,17 +7,19 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(3);
 
-  // Fetch products from backend
+  //  NEW states for adding product
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+
+  // 🔹 GET products from backend
   useEffect(() => {
-    fetch("https://api.jsonbin.io/v3/b/6957930fae596e708fbfd1d6", {
-      headers: {
-        "X-Master-Key":
-          "$2a$10$oDRhsr4MAVLOawtrc.WJnu3ybugKhhHSEFQTJX1diA1bVhm.pYgsq",
-      },
-    })
-      .then((res) => res.json())
+    fetch("http://localhost:5000/api/products")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch");
+        return res.json();
+      })
       .then((data) => {
-        setProducts(data.record || []);
+        setProducts(data);
         setLoading(false);
       })
       .catch((err) => {
@@ -27,12 +29,44 @@ export default function Dashboard() {
       });
   }, []);
 
+  //  POST product to backend
+  const addProduct = async () => {
+    if (!newName || !newDescription) return;
+
+    try {
+      const res = await fetch("http://localhost:5000/api/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newName,
+          description: newDescription,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to add product");
+
+      const savedProduct = await res.json();
+
+      // ✅ Update UI instantly
+      setProducts((prev) => [savedProduct, ...prev]);
+
+      // reset inputs
+      setNewName("");
+      setNewDescription("");
+      setVisibleCount((prev) => prev + 1);
+    } catch (err) {
+      console.error("Add product error:", err);
+    }
+  };
+
   // Filter products by search
   const filteredProducts = products.filter((product) =>
     product.name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Infinite scroll with one-by-one item loading
+  // Infinite scroll
   useEffect(() => {
     const handleScroll = () => {
       if (
@@ -44,10 +78,8 @@ export default function Dashboard() {
         setIsLoadingMore(true);
 
         let added = 0;
-
         const interval = setInterval(() => {
           setVisibleCount((prev) => {
-            // Stop if we reached the end
             if (prev >= filteredProducts.length) {
               clearInterval(interval);
               setIsLoadingMore(false);
@@ -55,7 +87,6 @@ export default function Dashboard() {
             }
 
             added++;
-            // Stop after adding 10 items
             if (added === 10) {
               clearInterval(interval);
               setIsLoadingMore(false);
@@ -63,7 +94,7 @@ export default function Dashboard() {
 
             return prev + 1;
           });
-        }, 500); // 200ms per item
+        }, 500);
       }
     };
 
@@ -71,13 +102,13 @@ export default function Dashboard() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isLoadingMore, visibleCount, filteredProducts.length]);
 
-  // Only show visible items
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
-  if (loading)
+  if (loading) {
     return (
       <p className="text-center text-white mt-10 text-3xl">Loading...</p>
     );
+  }
 
   return (
     <div className="max-w-2xl mx-auto mt-16 p-8 bg-gray-800 rounded-2xl shadow-xl text-white">
@@ -85,17 +116,43 @@ export default function Dashboard() {
         Products List
       </label>
 
+      {/* Search */}
       <input
-        className="w-full text-black bg-white max-w-md block px-4 py-3 mb-8 border-2 border-green-400 rounded-lg text-lg outline-none focus:ring-2 focus:ring-green-400 transition"
+        className="w-full text-black bg-white max-w-md block px-4 py-3 mb-4 border-2 border-green-400 rounded-lg text-lg outline-none focus:ring-2 focus:ring-green-400 transition"
         type="text"
         placeholder="Find your products"
         value={search}
         onChange={(e) => {
           setSearch(e.target.value);
-          setVisibleCount(3); // reset visible count on search
+          setVisibleCount(3);
         }}
       />
 
+      {/*  ADD PRODUCT */}
+      <input
+        className="w-full text-black bg-white block px-4 py-2 mb-3 rounded-lg"
+        type="text"
+        placeholder="Product name"
+        value={newName}
+        onChange={(e) => setNewName(e.target.value)}
+      />
+
+      <textarea
+        className="w-full text-black bg-white block px-4 py-2 mb-3 rounded-lg resize-none"
+        rows="3"
+        placeholder="Product description"
+        value={newDescription}
+        onChange={(e) => setNewDescription(e.target.value)}
+      ></textarea>
+
+      <button
+        onClick={addProduct}
+        className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg mb-8 transition"
+      >
+        Add
+      </button>
+
+      {/* Products list */}
       <ul className="space-y-6">
         {visibleProducts.length > 0 ? (
           visibleProducts.map((product, index) => (
@@ -118,7 +175,6 @@ export default function Dashboard() {
         )}
       </ul>
 
-      {/* Spinner for loading new items */}
       {isLoadingMore && (
         <div className="flex justify-center mt-6">
           <div className="w-8 h-8 border-4 border-gray-300 border-t-green-400 rounded-full animate-spin"></div>
